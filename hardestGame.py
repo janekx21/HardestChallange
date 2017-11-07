@@ -43,7 +43,7 @@ class House(Building):
 buildingClasses = [Building,House]
 
 def spawn(pos,id):
-	global units
+	global units,map
 	bu = None
 	try:
 		bu = buildingClasses[id]
@@ -55,6 +55,8 @@ def spawn(pos,id):
 			u[i]-=bu.price[i]
 			if u[i]<0:
 				return
+		if pos in map:
+			return
 		units = u[:]
 		b= bu(pos)
 
@@ -72,7 +74,9 @@ def loop():
 		tpos = npos[0]-8,npos[1]-8
 		mrel = mouse.get_rel()
 
-		mhaspressed=False
+		apos = (npos[0]+cam[0])//16*16,(npos[1]+cam[1])//16*16
+
+		menus = [False,False]
 
 		if mouse.get_pressed()[2]:
 			cam = mrel[0]+cam[0],mrel[1]+cam[1]
@@ -86,7 +90,7 @@ def loop():
 					sel = npos[0]//8
 					selected = sel
 				elif e.button == 1:
-					spawn(rpos,selected)
+					spawn(apos,selected)
 				
 
 		surf.fill((27,28,22))
@@ -96,6 +100,7 @@ def loop():
 			item.draw(surf)
 
 		if npos[1] < 16:
+			menus[0] = True
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)
 			draw.rect(trans,(27+20,28+20,22+20,245),(0,0,WIDHT,16))
 			draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,16-2),1)
@@ -117,6 +122,7 @@ def loop():
 		surf.blit(unitpic,(0,0))
 
 		if npos[1] > HEIGHT-16:
+			menus[1] = True
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)
 			draw.rect(trans,(27+20,28+20,22+20,245),(0,HEIGHT-16,WIDHT,16))
 			draw.rect(trans,(27+10,28+10,22+10,255),(1,HEIGHT-16+1,WIDHT-2,16-2),1)
@@ -131,9 +137,14 @@ def loop():
 			draw.rect(trans,(27+20,28+20,22+20,127),(0,HEIGHT-8,WIDHT,8))
 			draw.rect(trans,(27+10,28+10,22+10,255),(1,HEIGHT-8+1,WIDHT-2,8-2),1)
 			surf.blit(trans,(0,0))
+			if selected < len(buildingClasses):
+				b = Surface((16,16),SRCALPHA)
+				cl = buildingClasses[selected]
+				b.blit(cl.sprite,(0,0),(cl.id%16*16,cl.id//16*16,16,16))
+				surf.blit(transform.scale(b,(8,8)),(0,HEIGHT-8))
 
-
-		draw.rect(surf,(255,255,255),(tpos,(16,16)),1)
+		if not menus[0] and not menus[1]:
+			draw.rect(surf,(255,255,255),((apos[0]-cam[0],apos[1]-cam[1]),(16,16)),1)
 		b = transform.scale(surf,SIZE)
 		screen.blit(b,(0,0))
 		display.flip()
