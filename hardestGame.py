@@ -56,7 +56,9 @@ class House(Building):
 	price = [0,4,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		Worker(pos)
+		Worker((pos[0]+6,pos[1]+8)) # Worker 1
+		Worker((pos[0]+8,pos[1]+9))	# Worker 2
+		Worker((pos[0]+8,pos[1]+7)) # Worker 3
 
 class SmallCasle(Building):
 	id = 2
@@ -82,13 +84,22 @@ class Stock(Building):
 		Building.update(self)
 		for i,c in enumerate(self.capacity):
 			if c>0:
-				units[0]+=c
+				units[0]+=c 			#debug adding units
 				units[1]+=c
 				units[2]+=c
 				units[3]+=c
 				self.capacity[i] = 0
 
-buildingClasses = [Building,House,SmallCasle,Tower,Stock]
+class Tree(Building):
+	id = 5
+	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	
+	def __init__(self,pos):
+		Building.__init__(self,pos)
+		self.capacity = [50,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
+
+
+buildingClasses = [Building,House,SmallCasle,Tower,Stock,Tree]
 
 class Entety:
 	id = 0
@@ -105,52 +116,49 @@ class Worker(Entety):
 	color = (0,255,255)
 	def __init__(self,pos):
 		Entety.__init__(self,pos)
-		self.destination = None
-		self.destBuilding = None
+		self.task = None #{"destpos":(0,0),"destB":Buling Instance,"seaching":False}
 		self.carrying = None # {"id":0,"number":0}
 	def update(self):
 		rbuilding = None
-		if self.destination != None: 								# er hat ein ziel
-			offset = self.destination[0]-self.pos[0],self.destination[1]-self.pos[1]
+		if self.task: 								# er hat ein ziel
+			offset = self.task["destpos"][0]-self.pos[0],self.task["destpos"][1]-self.pos[1]	#MOVING
 			offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
 			if offset[0] == 0 and offset[1]==0: 					# wenn er ankommt
-				if self.destBuilding.id == Stock.id:
-					if self.carrying != None:
-						self.destBuilding.capacity[self.carrying["id"]]+=self.carrying["number"]
+				if self.task["destB"].id == Stock.id: 				#abladen
+					if self.carrying:
+						self.task["destB"].capacity[self.carrying["id"]]+=self.carrying["number"]
 						self.carrying = None
-						self.destBuilding = None
-						self.destination = None
+						self.task = None
 
-				if self.carrying == None and self.destBuilding != None and self.destination != None: 	# er hat nix mit dabei
-					for i,c in enumerate(self.destBuilding.capacity):
+
+				elif self.carrying == None: 	# er hat nix mit dabei
+					for i,c in enumerate(self.task["destB"].capacity):
 						if c>0:
 							self.carrying = {"id":i,"number":1}
-							self.destBuilding.capacity[i]-=1
-							for pos,item in map.iteritems():
-								if item.id == Stock.id:
-									rbuilding = item
-									break
-							#self.destination = None  # weg bringen XD
-							#self.destBuilding = None
+							self.task["destB"].capacity[i]-=1
+							self.task = None
 							break
-				if self.carrying != None and self.destBuilding != None:
-					pass
-					#self.destination = None
-					#self.destBuilding = None
+					self.task=None
+					#print("task = NONE Reset")
+					
 			##Random Walk adding
 			#offset = offset[0]+random.randrange(-1,2),offset[1]+random.randrange(-1,2)
 			#offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
 			self.pos = self.pos[0]+offset[0],self.pos[1]+offset[1]
 		else:
-			for pos,item in map.iteritems():
-				if item.id != Stock.id:
-					for c in item.capacity:
-						if c>0:
+			if self.carrying:
+				for pos,item in map.iteritems():
+						if item.id == Stock.id:
 							rbuilding = item
+			else:
+				for pos,item in map.iteritems():
+					if item.id != Stock.id:
+						for c in item.capacity:
+							if c>0:
+								rbuilding = item
 		if rbuilding:
-			self.destBuilding = rbuilding
-			self.destination = rbuilding.pos[0]+random.randrange(0,16),rbuilding.pos[1]+random.randrange(0,16)
-		
+			self.task = {"destpos":(rbuilding.pos[0]+random.randrange(0,16),rbuilding.pos[1]+random.randrange(0,16)),"destB":rbuilding}
+		#print(self.task,self.carrying) 			#DEBUG
 
 
 
@@ -210,8 +218,8 @@ def loop():
 			entety.update()
 	
 
-		surf.fill((27,28,22))
-		
+		#surf.fill((27,28,22))
+		surf.fill((24, 224, 67))
 
 		for pos,item in map.iteritems():
 			item.draw(surf,0)
