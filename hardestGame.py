@@ -15,6 +15,8 @@ entetys = []
 
 units = [25,55,15,120]
 #"gold":,"holz":,"eisen":,"kabeljau":
+#[0,0,0,0,0,0,0,0]
+#Einheiten  Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 unitpic = image.load("pics/units.png")
 numbers = image.load("pics/numbers.png")
 cam = 0,0
@@ -37,6 +39,7 @@ class Building:
 	price = [0,0,0,0] #gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		self.pos = pos
+		self.capacity = [0,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 		map[pos]=self
 	def draw(self,screen,layer): # color,entety,shadow,roof
 		if layer == 0:
@@ -60,14 +63,32 @@ class SmallCasle(Building):
 	price = [0,10,10,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
+		self.capacity = [10,0,0,0,0,2,5,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 
 class Tower(Building):
 	id = 3
 	price = [1,5,2,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
+class Stock(Building):
+	id = 4
+	price = [0,5,1,5]#gold,holz,eisen,kabeljau
+	
+	def __init__(self,pos):
+		Building.__init__(self,pos)
+		self.capacity = [0,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
+	def update(self):
+		global units
+		Building.update(self)
+		for i,c in enumerate(self.capacity):
+			if c>0:
+				units[0]+=c
+				units[1]+=c
+				units[2]+=c
+				units[3]+=c
+				self.capacity[i] = 0
 
-buildingClasses = [Building,House,SmallCasle,Tower]
+buildingClasses = [Building,House,SmallCasle,Tower,Stock]
 
 class Entety:
 	id = 0
@@ -84,17 +105,52 @@ class Worker(Entety):
 	color = (0,255,255)
 	def __init__(self,pos):
 		Entety.__init__(self,pos)
-		self.destination = (0,0)
+		self.destination = None
+		self.destBuilding = None
+		self.carrying = None # {"id":0,"number":0}
 	def update(self):
-		offset = self.destination[0]-self.pos[0],self.destination[1]-self.pos[1]
-		offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
-		if offset[0] == 0 and offset[1]==0:
-			rbuilding = random.choice(map.values())
-			self.destination = rbuilding.pos
-		##Random Walk adding
-		#offset = offset[0]+random.randrange(-1,2),offset[1]+random.randrange(-1,2)
-		#offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
-		self.pos = self.pos[0]+offset[0],self.pos[1]+offset[1]
+		rbuilding = None
+		if self.destination != None: 								# er hat ein ziel
+			offset = self.destination[0]-self.pos[0],self.destination[1]-self.pos[1]
+			offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
+			if offset[0] == 0 and offset[1]==0: 					# wenn er ankommt
+				if self.destBuilding.id == Stock.id:
+					if self.carrying != None:
+						self.destBuilding.capacity[self.carrying["id"]]+=self.carrying["number"]
+						self.carrying = None
+						self.destBuilding = None
+						self.destination = None
+
+				if self.carrying == None and self.destBuilding != None and self.destination != None: 	# er hat nix mit dabei
+					for i,c in enumerate(self.destBuilding.capacity):
+						if c>0:
+							self.carrying = {"id":i,"number":1}
+							self.destBuilding.capacity[i]-=1
+							for pos,item in map.iteritems():
+								if item.id == Stock.id:
+									rbuilding = item
+									break
+							#self.destination = None  # weg bringen XD
+							#self.destBuilding = None
+							break
+				if self.carrying != None and self.destBuilding != None:
+					pass
+					#self.destination = None
+					#self.destBuilding = None
+			##Random Walk adding
+			#offset = offset[0]+random.randrange(-1,2),offset[1]+random.randrange(-1,2)
+			#offset = clamp(offset[0],-1,1),clamp(offset[1],-1,1)
+			self.pos = self.pos[0]+offset[0],self.pos[1]+offset[1]
+		else:
+			for pos,item in map.iteritems():
+				if item.id != Stock.id:
+					for c in item.capacity:
+						if c>0:
+							rbuilding = item
+		if rbuilding:
+			self.destBuilding = rbuilding
+			self.destination = rbuilding.pos[0]+random.randrange(0,16),rbuilding.pos[1]+random.randrange(0,16)
+		
 
 
 
