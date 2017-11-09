@@ -19,7 +19,7 @@ units = [25,55,15,120]
 #Einheiten  Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 unitpic = image.load("pics/units.png")
 numbers = image.load("pics/numbers.png")
-cam = 0,0
+
 selected = 0
 
 clock = time.Clock()
@@ -30,6 +30,21 @@ def camtrans(pos):
 
 def clamp(my_value,min_value,max_value):
 	return max(min(my_value, max_value), min_value)
+
+def drawnumber(number,x,y):
+	global surf
+	n = number
+	if n>99:n =99
+	if n <0:n=0;print("n is too low")
+	num = str(n)
+	surf.blit(numbers,(x,y),(int(num[0])*8,0,8,8))
+	if len(num) == 2:
+		surf.blit(numbers,(x+4,y),(int(num[1])*8,0,8,8))
+
+def mapupdate():
+	global map
+	for k,item in map.iteritems():
+		item.on_mapupdate()
 
 class Building:
 	sprite = image.load("pics/buildings.png")
@@ -50,14 +65,23 @@ class Building:
 			screen.blit(self.roofs,camtrans(self.pos),(self.id%16*16,self.id//16*16,16,16))
 	def update(self):
 		pass
+	def hover(self,screen):
+		draw.rect(screen,(255,255,255),(0,HEIGHT-16,WIDHT,16))
+		#draw.rect(screen,(0,0,0),(0,HEIGHT-8,WIDHT,8),1)
+		for i,item in enumerate(self.capacity):
+			drawnumber(item,i%4*16,HEIGHT-16+i//4*8)
+	def on_pressed(self):
+		print(self.id)
+	def on_mapupdate(self):
+		pass
 
 class House(Building):
 	id = 1
 	price = [0,4,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		Worker((pos[0]+6,pos[1]+8)) # Worker 1
-		Worker((pos[0]+8,pos[1]+9))	# Worker 2
+		WoodWorker((pos[0]+6,pos[1]+8)) # Worker 1
+		StoneWorker((pos[0]+8,pos[1]+9))	# Worker 2
 		Worker((pos[0]+8,pos[1]+7)) # Worker 3
 
 class SmallCasle(Building):
@@ -65,13 +89,42 @@ class SmallCasle(Building):
 	price = [0,10,10,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		self.capacity = [10,0,0,0,0,2,5,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
-
 class Tower(Building):
 	id = 3
+	sprite = image.load("pics/tower.png")
+	shadows = image.load("pics/towershadow.png")
 	price = [1,5,2,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
+		self.index = 0
+	def draw(self,screen,layer):
+		if layer == 0:
+			pass
+		elif layer == 2:
+			screen.blit(self.shadows,camtrans(self.pos),(self.index%4*16,self.index//4*16,16,16))
+		elif layer == 3:
+			screen.blit(self.sprite,camtrans(self.pos),(self.index%4*16,self.index//4*16,16,16))
+	def on_mapupdate(self):
+		global map
+		self.index = 0
+		x,y = self.pos
+		try:
+			if map[x+16,y].id==self.id:
+				self.index+=1
+		except:pass
+		try:
+			if map[x,y-16].id==self.id:
+				self.index+=2
+		except:pass
+		try:
+			if map[x-16,y].id==self.id:
+				self.index+=4
+		except:pass
+		try:
+			if map[x,y+16].id==self.id:
+				self.index+=8
+		except:pass
+
 class Stock(Building):
 	id = 4
 	price = [0,5,1,5]#gold,holz,eisen,kabeljau
@@ -98,8 +151,30 @@ class Tree(Building):
 		Building.__init__(self,pos)
 		self.capacity = [50,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 
+class Stone(Building):
+	id = 6
+	price = [0,0,0,0]
+	def __init__(self,pos):
+		Building.__init__(self,pos)
+		self.capacity = [0,50,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 
-buildingClasses = [Building,House,SmallCasle,Tower,Stock,Tree]
+class WoodWorkerHouse(Building):
+	id = 7
+	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	def __init__(self,pos):
+		Building.__init__(self,pos)
+		WoodWorker((pos[0]+6,pos[1]+8)) # Worker 1
+
+class StoneWorkerHouse(Building):
+	id = 8
+	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	def __init__(self,pos):
+		Building.__init__(self,pos)
+		StoneWorker((pos[0]+6,pos[1]+8)) # Worker 1
+
+
+
+buildingClasses = [Building,House,SmallCasle,Tower,Stock,Tree,Stone,WoodWorkerHouse,StoneWorkerHouse]
 
 class Entety:
 	id = 0
@@ -114,10 +189,12 @@ class Entety:
 
 class Worker(Entety):
 	color = (0,255,255)
+	canpickup = [] # all ids
 	def __init__(self,pos):
 		Entety.__init__(self,pos)
 		self.task = None #{"destpos":(0,0),"destB":Buling Instance,"seaching":False}
 		self.carrying = None # {"id":0,"number":0}
+		
 	def update(self):
 		rbuilding = None
 		if self.task: 								# er hat ein ziel
@@ -153,13 +230,25 @@ class Worker(Entety):
 			else:
 				for pos,item in map.iteritems():
 					if item.id != Stock.id:
-						for c in item.capacity:
-							if c>0:
+						for i,c in enumerate(item.capacity):
+							if c>0 and i in self.canpickup:
 								rbuilding = item
 		if rbuilding:
 			self.task = {"destpos":(rbuilding.pos[0]+random.randrange(0,16),rbuilding.pos[1]+random.randrange(0,16)),"destB":rbuilding}
 		#print(self.task,self.carrying) 			#DEBUG
 
+
+class WoodWorker(Worker):
+	canpickup = [0] # all ids
+	color = (50,250,150)
+	def __init__(self,pos):
+		Worker.__init__(self,pos)
+class StoneWorker(Worker):
+	canpickup = [1] # all ids
+	color = (250,50,150)
+	def __init__(self,pos):
+		Worker.__init__(self,pos)
+		
 
 
 
@@ -182,23 +271,34 @@ def spawn(pos,id):
 			return
 		units = u[:]
 		b= bu(pos)
+		mapupdate()
 
+prePos = (0,0)
+camD = 0,0
+cam = 0,0
 
 def loop():
-	global cam,selected
+	global cam,selected,prePos,camD
+
 	while True:
 		clock.tick(60)
+
 		mpos = mouse.get_pos()
+		
 		npos = mpos[0]//SCALE,mpos[1]//SCALE
 		tpos = npos[0]-8,npos[1]-8
 		mrel = mouse.get_rel()
+		#mrel = mpos[0]-prePos[0],mpos[1]-prePos[1]
 
 		apos = (npos[0]+cam[0])//16*16,(npos[1]+cam[1])//16*16
 
 		menus = [False,False]
 
 		if mouse.get_pressed()[2]:
-			cam = mrel[0]+cam[0],mrel[1]+cam[1]
+			camD =-mrel[0]*.2+camD[0],-mrel[1]*.2+camD[1]
+
+		cam = int(camD[0]),int(camD[1])
+
 		rpos = tpos[0]+cam[0],tpos[1]+cam[1]
 		for e in event.get():
 			if e.type == QUIT:
@@ -206,7 +306,7 @@ def loop():
 			if e.type == MOUSEBUTTONDOWN:
 				if npos[1]>HEIGHT-16:
 					mhaspressed = True
-					sel = npos[0]//8
+					sel = npos[0]//8 + (npos[1]-HEIGHT+16)//8*8
 					selected = sel
 				elif e.button == 1:
 					spawn(apos,selected)
@@ -248,15 +348,17 @@ def loop():
 				if n>99:n =99
 				if n <0:n=0;print("n is too low")
 				num = str(n)
-				surf.blit(numbers,(i*8,8),(int(num[0])*8,0,8,8))
+				surf.blit(numbers,(i*16,8),(int(num[0])*8,0,8,8))
 				if len(num) == 2:
-					surf.blit(numbers,(i*8+4,8),(int(num[1])*8,0,8,8))
+					surf.blit(numbers,(i*16+4,8),(int(num[1])*8,0,8,8))
 		else:
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)					#UI Rect
 			draw.rect(trans,(27+20,28+20,22+20,127),(0,0,WIDHT,8))
 			draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,8-2),1)
 			surf.blit(trans,(0,0))
-		surf.blit(unitpic,(0,0))										#Unit Texture
+
+		for i,item in enumerate(units):
+			surf.blit(unitpic,(i*16,0),(i*8,0,8,8))										#Unit Texture
 
 		if npos[1] > HEIGHT-16:
 			menus[1] = True
@@ -268,8 +370,8 @@ def loop():
 				b = Surface((16,16),SRCALPHA)
 				b.blit(cl.sprite,(0,0),(cl.id%16*16,cl.id//16*16,16,16))
 				b.blit(cl.roofs,(0,0),(cl.id%16*16,cl.id//16*16,16,16))
-				surf.blit(transform.scale(b,(8,8)),(i*8,HEIGHT-16))
-			draw.rect(surf,(255,255,255),(selected*8,HEIGHT-16,8,8),1)
+				surf.blit(transform.scale(b,(8,8)),(i%8*8,HEIGHT-16+i//8*8))
+			draw.rect(surf,(255,255,255),(selected%8*8,HEIGHT-16+selected//8*8,8,8),1)
 		else:
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)					#UI Rect
 			draw.rect(trans,(27+20,28+20,22+20,127),(0,HEIGHT-8,WIDHT,8))
@@ -283,10 +385,20 @@ def loop():
 				surf.blit(transform.scale(b,(8,8)),(0,HEIGHT-8))
 
 		if not menus[0] and not menus[1]:
-			draw.rect(surf,(255,255,255),((apos[0]-cam[0],apos[1]-cam[1]),(16,16)),1)
+			x,y = apos
+
+			try:
+				building = map[x,y]
+				building.hover(surf)
+				if mouse.get_pressed()[0]:
+					building.on_pressed()
+			except:
+				draw.rect(surf,(255,255,255),((apos[0]-cam[0],apos[1]-cam[1]),(16,16)),1)
+
 		b = transform.scale(surf,SIZE)
 		screen.blit(b,(0,0))
 		display.flip()
+		
 
 if __name__ == '__main__':
 	loop()
