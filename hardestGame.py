@@ -2,8 +2,8 @@ from pygame import *
 import random
 
 init()
-WIDHT = 64
-HEIGHT = 64
+WIDHT = 128#64
+HEIGHT = 128#64
 SCALE = 8
 SIZE = (WIDHT*SCALE,HEIGHT*SCALE)
 
@@ -12,9 +12,10 @@ surf = Surface((WIDHT,HEIGHT))
 
 map = {}
 entetys = []
+deathgroup = []
 
-units = [25,55,15,120]
-#"gold":,"holz":,"eisen":,"kabeljau":
+units = [25,55,15,120,0,0]
+#holz,stein,eisen,gold,kabeljau,bambus
 #[0,0,0,0,0,0,0,0]
 #Einheiten  Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
 unitpic = image.load("pics/units.png")
@@ -50,11 +51,13 @@ class Building:
 	sprite = image.load("pics/buildings.png")
 	shadows = image.load("pics/shadows.png")
 	roofs = image.load("pics/roofs.png")
+	cancapacity = True
 	id = 0
-	price = [0,0,0,0] #gold,holz,eisen,kabeljau
+	price = [0,0,0,0,0,0] #gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		self.pos = pos
 		self.capacity = [0,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
+		self.owned = []
 		map[pos]=self
 	def draw(self,screen,layer): # color,entety,shadow,roof
 		if layer == 0:
@@ -65,35 +68,49 @@ class Building:
 			screen.blit(self.roofs,camtrans(self.pos),(self.id%16*16,self.id//16*16,16,16))
 	def update(self):
 		pass
-	def hover(self,screen):
+	def on_hover(self,screen):
 		draw.rect(screen,(255,255,255),(0,HEIGHT-16,WIDHT,16))
 		#draw.rect(screen,(0,0,0),(0,HEIGHT-8,WIDHT,8),1)
 		for i,item in enumerate(self.capacity):
-			drawnumber(item,i%4*16,HEIGHT-16+i//4*8)
+			drawnumber(item,i%4*16+8,HEIGHT-16+i//4*8)
+			screen.blit(unitpic,(i%4*16,HEIGHT-16+i//4*8),(i*8,0,8,8))
 	def on_pressed(self):
 		print(self.id)
 	def on_mapupdate(self):
 		pass
+	def on_hold(self,screen):
+		pass
+	def die(self):
+		global deathgroup
+		deathgroup.append(self)
+	def rem(self):
+		global map
+		del map[self.pos]
+		for o in self.owned:
+			try:
+				o.die()
+			except:
+				print("{} cant die".format(o))
 
 class House(Building):
 	id = 1
-	price = [0,4,0,0]#gold,holz,eisen,kabeljau
+	price = [0,4,0,0,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		WoodWorker((pos[0]+6,pos[1]+8)) # Worker 1
-		StoneWorker((pos[0]+8,pos[1]+9))	# Worker 2
-		Worker((pos[0]+8,pos[1]+7)) # Worker 3
+		self.owned.append(WoodWorker((pos[0]+6,pos[1]+8)))# Worker 1
+		self.owned.append(StoneWorker((pos[0]+8,pos[1]+9)))	# Worker 2
+		self.owned.append(Worker((pos[0]+8,pos[1]+7))) # Worker 3
 
 class SmallCasle(Building):
 	id = 2
-	price = [0,10,10,0]#gold,holz,eisen,kabeljau
+	price = [0,10,10,0,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
 class Tower(Building):
 	id = 3
 	sprite = image.load("pics/tower.png")
 	shadows = image.load("pics/towershadow.png")
-	price = [1,5,2,0]#gold,holz,eisen,kabeljau
+	price = [1,5,2,0,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
 		self.index = 0
@@ -127,7 +144,7 @@ class Tower(Building):
 
 class Stock(Building):
 	id = 4
-	price = [0,5,1,5]#gold,holz,eisen,kabeljau
+	price = [0,5,1,5,0,0]#gold,holz,eisen,kabeljau
 	
 	def __init__(self,pos):
 		Building.__init__(self,pos)
@@ -135,6 +152,7 @@ class Stock(Building):
 	def update(self):
 		global units
 		Building.update(self)
+	def on_pressed(self):
 		for i,c in enumerate(self.capacity):
 			if c>0:
 				units[0]+=c 			#debug adding units
@@ -145,32 +163,48 @@ class Stock(Building):
 
 class Tree(Building):
 	id = 5
-	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	price = [0,0,0,0,0,0]#gold,holz,eisen,kabeljau
 	
 	def __init__(self,pos):
 		Building.__init__(self,pos)
 		self.capacity = [50,0,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
+	def update(self):
+		Building.update(self)
+		a = 0
+		for x in self.capacity:
+			if x ==0:
+				a+=1
+		if a == len(self.capacity):
+			self.die()
 
 class Stone(Building):
 	id = 6
-	price = [0,0,0,0]
+	price = [0,0,0,0,0,0]
 	def __init__(self,pos):
 		Building.__init__(self,pos)
 		self.capacity = [0,50,0,0,0,0,0,0]#Holz,Stein,Eisen,Bronze,Gold,Diamanten,Zwiebeln,Kaka
+	def update(self):
+		Building.update(self)
+		a = 0
+		for x in self.capacity:
+			if x ==0:
+				a+=1
+		if a == len(self.capacity):
+			self.die()
 
 class WoodWorkerHouse(Building):
 	id = 7
-	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	price = [0,0,0,0,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		WoodWorker((pos[0]+6,pos[1]+8)) # Worker 1
+		self.owned.append(WoodWorker((pos[0]+6,pos[1]+8))) # Worker 1
 
 class StoneWorkerHouse(Building):
 	id = 8
-	price = [0,0,0,0]#gold,holz,eisen,kabeljau
+	price = [0,0,0,0,0,0]#gold,holz,eisen,kabeljau
 	def __init__(self,pos):
 		Building.__init__(self,pos)
-		StoneWorker((pos[0]+6,pos[1]+8)) # Worker 1
+		self.owned.append(StoneWorker((pos[0]+6,pos[1]+8))) # Worker 1
 
 
 
@@ -181,11 +215,20 @@ class Entety:
 	color = (255,0,0)
 	def __init__(self,pos):
 		self.pos = pos
+		self.wait_time = 0
 		entetys.append(self)
 	def draw(self,screen):
 		screen.set_at(camtrans(self.pos),self.color)
 	def update(self):
-		pass
+		if self.wait_time>0:
+			self.wait_time-=1
+			return False
+		return True
+	def die(self):
+		global deathgroup
+		deathgroup.append(self)
+	def rem(self):
+		entetys.remove(self)
 
 class Worker(Entety):
 	color = (0,255,255)
@@ -196,6 +239,8 @@ class Worker(Entety):
 		self.carrying = None # {"id":0,"number":0}
 		
 	def update(self):
+		if not Entety.update(self):
+			return
 		rbuilding = None
 		if self.task: 								# er hat ein ziel
 			offset = self.task["destpos"][0]-self.pos[0],self.task["destpos"][1]-self.pos[1]	#MOVING
@@ -206,6 +251,7 @@ class Worker(Entety):
 						self.task["destB"].capacity[self.carrying["id"]]+=self.carrying["number"]
 						self.carrying = None
 						self.task = None
+						self.wait_time = 5
 
 
 				elif self.carrying == None: 	# er hat nix mit dabei
@@ -214,6 +260,7 @@ class Worker(Entety):
 							self.carrying = {"id":i,"number":1}
 							self.task["destB"].capacity[i]-=1
 							self.task = None
+							self.wait_time = 5
 							break
 					self.task=None
 					#print("task = NONE Reset")
@@ -227,12 +274,14 @@ class Worker(Entety):
 				for pos,item in map.iteritems():
 						if item.id == Stock.id:
 							rbuilding = item
+							self.wait_time = 5
 			else:
 				for pos,item in map.iteritems():
 					if item.id != Stock.id:
 						for i,c in enumerate(item.capacity):
 							if c>0 and i in self.canpickup:
 								rbuilding = item
+								self.wait_time = 5
 		if rbuilding:
 			self.task = {"destpos":(rbuilding.pos[0]+random.randrange(0,16),rbuilding.pos[1]+random.randrange(0,16)),"destB":rbuilding}
 		#print(self.task,self.carrying) 			#DEBUG
@@ -276,12 +325,16 @@ def spawn(pos,id):
 prePos = (0,0)
 camD = 0,0
 cam = 0,0
+justpressed = [False,False,False,False]
+frame = 0
 
 def loop():
-	global cam,selected,prePos,camD
+	global cam,selected,prePos,camD,frame,deathgroup
 
 	while True:
 		clock.tick(60)
+		frame+=1
+		deathgroup = []
 
 		mpos = mouse.get_pos()
 		
@@ -291,6 +344,7 @@ def loop():
 		#mrel = mpos[0]-prePos[0],mpos[1]-prePos[1]
 
 		apos = (npos[0]+cam[0])//16*16,(npos[1]+cam[1])//16*16
+		justpressed = [False,False,False,False,False,False]
 
 		menus = [False,False]
 
@@ -304,6 +358,7 @@ def loop():
 			if e.type == QUIT:
 				return
 			if e.type == MOUSEBUTTONDOWN:
+				justpressed[e.button]=True
 				if npos[1]>HEIGHT-16:
 					mhaspressed = True
 					sel = npos[0]//8 + (npos[1]-HEIGHT+16)//8*8
@@ -339,23 +394,22 @@ def loop():
 		if npos[1] < 16:
 			menus[0] = True
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)					#UI Rect
-			draw.rect(trans,(27+20,28+20,22+20,245),(0,0,WIDHT,16))
-			draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,16-2),1)
-			surf.blit(trans,(0,0))
-
-			for i,item in enumerate(units):								#Unit Drawing
-				n = item
-				if n>99:n =99
-				if n <0:n=0;print("n is too low")
-				num = str(n)
-				surf.blit(numbers,(i*16,8),(int(num[0])*8,0,8,8))
-				if len(num) == 2:
-					surf.blit(numbers,(i*16+4,8),(int(num[1])*8,0,8,8))
+			draw.rect(trans,(27+20,28+20,22+20,127),(0,0,WIDHT,16))
+			#draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,16-2),1)
+			surf.blit(trans,(0,0))	
 		else:
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)					#UI Rect
 			draw.rect(trans,(27+20,28+20,22+20,127),(0,0,WIDHT,8))
-			draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,8-2),1)
+			#draw.rect(trans,(27+10,28+10,22+10,255),(1,1,WIDHT-2,8-2),1)
 			surf.blit(trans,(0,0))
+		for i,item in enumerate(units):								#Unit Drawing
+			n = item
+			if n>99:n =99
+			if n <0:n=0;print("n is too low")
+			num = str(n)
+			surf.blit(numbers,(i*16+8,0),(int(num[0])*8,0,8,8))
+			if len(num) == 2:
+				surf.blit(numbers,(i*16+4+8,0),(int(num[1])*8,0,8,8))
 
 		for i,item in enumerate(units):
 			surf.blit(unitpic,(i*16,0),(i*8,0,8,8))										#Unit Texture
@@ -375,7 +429,7 @@ def loop():
 		else:
 			trans = Surface((WIDHT,HEIGHT),SRCALPHA)					#UI Rect
 			draw.rect(trans,(27+20,28+20,22+20,127),(0,HEIGHT-8,WIDHT,8))
-			draw.rect(trans,(27+10,28+10,22+10,255),(1,HEIGHT-8+1,WIDHT-2,8-2),1)
+			#draw.rect(trans,(27+10,28+10,22+10,255),(1,HEIGHT-8+1,WIDHT-2,8-2),1)
 			surf.blit(trans,(0,0))
 			if selected < len(buildingClasses):							#Buildings Small
 				b = Surface((16,16),SRCALPHA)
@@ -386,18 +440,25 @@ def loop():
 
 		if not menus[0] and not menus[1]:
 			x,y = apos
-
+			
 			try:
 				building = map[x,y]
-				building.hover(surf)
+				building.on_hover(surf)
 				if mouse.get_pressed()[0]:
+					building.on_hold(surf)
+				if justpressed[1]:
 					building.on_pressed()
+				if justpressed[2]:
+					building.die()
 			except:
 				draw.rect(surf,(255,255,255),((apos[0]-cam[0],apos[1]-cam[1]),(16,16)),1)
 
 		b = transform.scale(surf,SIZE)
 		screen.blit(b,(0,0))
 		display.flip()
+
+		for item in deathgroup:
+			item.rem()
 		
 
 if __name__ == '__main__':
